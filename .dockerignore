@@ -29,4 +29,8 @@ docker-compose.yml
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# AWS CLI
+aws
+awscliv2.zip

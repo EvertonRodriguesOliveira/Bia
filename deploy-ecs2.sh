@@ -10,8 +10,8 @@ set -e  # Parar execução em caso de erro
 DEFAULT_REGION="us-east-1"
 DEFAULT_ECR_REPO="861276121195.dkr.ecr.us-east-1.amazonaws.com/bia"
 DEFAULT_CLUSTER="cluster-bia"
-DEFAULT_SERVICE="services-bia"
-DEFAULT_TASK_FAMILY="task-def-bia"
+DEFAULT_SERVICE="service-bia-alb"
+DEFAULT_TASK_FAMILY="task-def-bia-alb"
 
 # Cores para output
 RED='\033[0;31m'
@@ -180,55 +180,15 @@ get_current_task_definition() {
         --output json 2>/dev/null || echo "{}"
 }
 
-# Função para criar nova task definition
-create_task_definition() {
-    local commit_hash="$1"
-    local image_uri="$ECR_REPO:$commit_hash"
-    
-    log_info "Criando nova task definition..."
-    
-    # Obter task definition atual
-    local current_task_def=$(get_current_task_definition)
-    
-    if [ "$current_task_def" = "{}" ]; then
-        log_error "Task definition não encontrada. Verifique se a família '$TASK_FAMILY' existe."
-        exit 1
-    else
-        # Atualizar imagem na task definition existente
-        current_task_def=$(echo "$current_task_def" | jq --arg image "$image_uri" '
-            .containerDefinitions[0].image = $image |
-            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy, .runtimePlatform, .enableFaultInjection)
-        ')
-    fi
-    
-    # Salvar temporariamente para debug
-    echo "$current_task_def" > /tmp/task-def-debug.json
-    
-    # Registrar nova task definition
-    local new_task_def_arn=$(echo "$current_task_def" | aws ecs register-task-definition \
-        --region "$REGION" \
-        --cli-input-json file:///dev/stdin \
-        --query 'taskDefinition.taskDefinitionArn' \
-        --output text 2>/tmp/task-def-error.log)
-    
-    if [ $? -eq 0 ]; then
-        log_success "Nova task definition criada: $new_task_def_arn"
-        echo "$new_task_def_arn"
-    else
-        log_error "Falha ao criar task definition"
-        log_error "Erro detalhado:"
-        cat /tmp/task-def-error.log
-        log_error "JSON gerado:"
-        cat /tmp/task-def-debug.json
-        exit 1
-    fi
-}
-
 # Função para atualizar serviço ECS
 update_service() {
     local task_def_arn="$1"
     
+    # Limpar quebras de linha do ARN
+    task_def_arn=$(echo "$task_def_arn" | tr -d '\n\r')
+    
     log_info "Atualizando serviço ECS..."
+    log_info "Task Definition ARN: $task_def_arn"
     
     aws ecs update-service \
         --region "$REGION" \
@@ -307,7 +267,41 @@ rollback() {
     fi
     
     # Criar nova task definition com a imagem do rollback
-    local task_def_arn=$(create_task_definition "$target_tag")
+    log_info "Criando nova task definition para rollback..."
+    local current_task_def=$(get_current_task_definition)
+    
+    if [ "$current_task_def" = "{}" ]; then
+        log_error "Task definition não encontrada. Verifique se a família '$TASK_FAMILY' existe."
+        exit 1
+    fi
+    
+    # Atualizar imagem na task definition existente
+    local image_uri="$ECR_REPO:$target_tag"
+    current_task_def=$(echo "$current_task_def" | jq --arg image "$image_uri" '
+        .containerDefinitions[0].image = $image |
+        del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy, .runtimePlatform, .enableFaultInjection)
+    ')
+    
+    # Salvar temporariamente para debug
+    echo "$current_task_def" > /tmp/task-def-debug.json
+    
+    # Registrar nova task definition
+    local task_def_arn=$(aws ecs register-task-definition \
+        --region "$REGION" \
+        --cli-input-json "file:///tmp/task-def-debug.json" \
+        --query 'taskDefinition.taskDefinitionArn' \
+        --output text 2>/tmp/task-def-error.log)
+    
+    if [ $? -ne 0 ]; then
+        log_error "Falha ao criar task definition para rollback"
+        log_error "Erro detalhado:"
+        cat /tmp/task-def-error.log
+        log_error "JSON gerado:"
+        cat /tmp/task-def-debug.json
+        exit 1
+    fi
+    
+    log_success "Nova task definition criada: $task_def_arn"
     
     # Atualizar serviço
     update_service "$task_def_arn"
@@ -336,7 +330,41 @@ deploy() {
     push_image "$commit_hash"
     
     # Criar task definition
-    local task_def_arn=$(create_task_definition "$commit_hash")
+    log_info "Criando nova task definition..."
+    local current_task_def=$(get_current_task_definition)
+    
+    if [ "$current_task_def" = "{}" ]; then
+        log_error "Task definition não encontrada. Verifique se a família '$TASK_FAMILY' existe."
+        exit 1
+    fi
+    
+    # Atualizar imagem na task definition existente
+    local image_uri="$ECR_REPO:$commit_hash"
+    current_task_def=$(echo "$current_task_def" | jq --arg image "$image_uri" '
+        .containerDefinitions[0].image = $image |
+        del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy, .runtimePlatform, .enableFaultInjection)
+    ')
+    
+    # Salvar temporariamente para debug
+    echo "$current_task_def" > /tmp/task-def-debug.json
+    
+    # Registrar nova task definition
+    local task_def_arn=$(aws ecs register-task-definition \
+        --region "$REGION" \
+        --cli-input-json "file:///tmp/task-def-debug.json" \
+        --query 'taskDefinition.taskDefinitionArn' \
+        --output text 2>/tmp/task-def-error.log)
+    
+    if [ $? -ne 0 ]; then
+        log_error "Falha ao criar task definition"
+        log_error "Erro detalhado:"
+        cat /tmp/task-def-error.log
+        log_error "JSON gerado:"
+        cat /tmp/task-def-debug.json
+        exit 1
+    fi
+    
+    log_success "Nova task definition criada: $task_def_arn"
     
     # Atualizar serviço
     update_service "$task_def_arn"

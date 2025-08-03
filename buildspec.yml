@@ -21,7 +21,7 @@ phases:
   post_build:
     commands:
       - echo Build finalizado com sucesso em `date`
-      - echo "Verificando variáveis:"
+      - echo "Verificando variaveis:"
       - echo "REPOSITORY_URI: $REPOSITORY_URI"
       - echo "IMAGE_TAG: $IMAGE_TAG"
       - echo Fazendo push da imagem para o ECR...

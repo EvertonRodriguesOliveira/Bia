@@ -5,13 +5,13 @@ phases:
     commands:
       - echo Fazendo login no ECR...
       - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - echo "Account ID: $AWS_ACCOUNT_ID"
+      - echo "Account ID colon $AWS_ACCOUNT_ID"
       - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
       - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/bia
-      - echo "Repository URI: $REPOSITORY_URI"
+      - echo "Repository URI colon $REPOSITORY_URI"
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
-      - echo "Image Tag: $IMAGE_TAG"
+      - echo "Image Tag colon $IMAGE_TAG"
   build:
     commands:
       - echo Build iniciado em `date`
@@ -21,9 +21,9 @@ phases:
   post_build:
     commands:
       - echo Build finalizado com sucesso em `date`
-      - echo "Verificando variaveis:"
-      - echo "REPOSITORY_URI: $REPOSITORY_URI"
-      - echo "IMAGE_TAG: $IMAGE_TAG"
+      - echo "Verificando variaveis colon"
+      - echo "REPOSITORY_URI colon $REPOSITORY_URI"
+      - echo "IMAGE_TAG colon $IMAGE_TAG"
       - echo Fazendo push da imagem para o ECR...
       - docker images | grep bia
       - docker push $REPOSITORY_URI:latest

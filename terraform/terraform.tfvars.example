@@ -1,0 +1,13 @@
+# Example terraform.tfvars file
+# Copy this file to terraform.tfvars and adjust the values as needed
+
+aws_region = "us-east-1"
+environment = "dev"
+
+# Database configuration
+db_name     = "bia"
+db_username = "postgres"
+db_password = "your-secure-password-here"
+
+# Application configuration
+app_image_tag = "latest"
